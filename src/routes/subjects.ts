@@ -9,9 +9,14 @@ router.get("/", async (req, res) => {
     try {
 
         const {search, department, page = 1, limit = 10} = req.query;
-
-        const currentPage = Math.max(1, +page);
-        const limitPerPage = Math.max(1, +limit);
+        const rawPage = Array.isArray(page) ? page[0] : page;
+        const rawLimit = Array.isArray(limit) ? limit[0] : limit;
+        const pageNum = Number(rawPage);
+        const limitNum = Number(rawLimit);
+        const currentPage = Number.isFinite(pageNum) && pageNum > 0 ? Math.floor(pageNum) : 1;
+        const limitPerPage = Number.isFinite(limitNum) && limitNum > 0
+          ? Math.min(100, Math.floor(limitNum))
+          : 10;
 
         const offset = (currentPage - 1) * limitPerPage;
 
