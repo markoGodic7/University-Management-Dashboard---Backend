@@ -1,9 +1,6 @@
 {
   "name": "classroom-backend",
   "version": "1.0.0",
-  "overrides": {
-    "esbuild": ">=0.25.0"
-  },
   "description": "",
   "main": "index.js",
   "scripts": {
