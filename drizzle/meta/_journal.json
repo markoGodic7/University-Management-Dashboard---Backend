@@ -15,6 +15,27 @@
       "when": 1770973705685,
       "tag": "0001_sour_ronan",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1771767369919,
+      "tag": "0002_far_hellfire_club",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1771770057160,
+      "tag": "0003_cold_amazoness",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1771770544544,
+      "tag": "0004_ancient_zaladane",
+      "breakpoints": true
     }
   ]
 }
