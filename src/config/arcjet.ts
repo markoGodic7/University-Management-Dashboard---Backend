@@ -1,9 +1,6 @@
 import arcjet, { shield, detectBot, tokenBucket, slidingWindow } from "@arcjet/node";
-import { isSpoofedBot } from "@arcjet/inspect";
+// import { isSpoofedBot } from "@arcjet/inspect";
 import express from "express";
-
-// const app = express();
-// const port = 3000;
 
 if(!process.env.ARCJET_KEY && process.env.NODE_ENV !== "test") {
     throw new Error('ARCJET_KEY env is required');
