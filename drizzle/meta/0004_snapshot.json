@@ -1,6 +1,6 @@
 {
-  "id": "7638bc1c-c0b1-458c-b3bc-1bc6c829ca1a",
-  "prevId": "cf9fe222-f82c-444c-a6a6-168d0d58a694",
+  "id": "c4bfa382-78c5-402a-b272-75d081a88d8e",
+  "prevId": "7638bc1c-c0b1-458c-b3bc-1bc6c829ca1a",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -342,7 +342,7 @@
               "nulls": "last"
             }
           ],
-          "isUnique": true,
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -606,7 +606,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
@@ -714,7 +714,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },

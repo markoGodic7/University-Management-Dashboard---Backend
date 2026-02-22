@@ -1,4 +1,4 @@
-import {integer, pgEnum, pgTable, text, timestamp, varchar, jsonb, index } from "drizzle-orm/pg-core";
+import {integer, pgEnum, pgTable, text, timestamp, varchar, jsonb, index, uniqueIndex } from "drizzle-orm/pg-core";
 import {relations} from "drizzle-orm";
 import {user} from "./auth";
 
@@ -73,7 +73,7 @@ export const enrollments = pgTable(
     (table) => ({
         studentIdIdx: index("enrollments_student_id_idx").on(table.studentId),
         classIdIdx: index("enrollments_class_id_idx").on(table.classId),
-        studentClassUnique: index("enrollments_student_class_unique").on(
+        studentClassUnique: uniqueIndex("enrollments_student_class_unique").on(
             table.studentId,
             table.classId
         ),
