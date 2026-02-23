@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { db } from "../db";
+import { db } from "../db/index.js";
 import * as schema from '../db/Schema/auth.js'
 
 const BETTER_AUTH_SECRET = process.env.BETTER_AUTH_SECRET;
