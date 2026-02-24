@@ -11,9 +11,11 @@ const router = express.Router();
 router.get("/", async (req, res) => {
     try {
         const { search, subject, teacher, page = 1, limit = 10 } = req.query;
-
-        // const currentPage = Math.max(1, +page);
-        // const limitPerPage = Math.max(1, +limit);
+        const normalizeQuery = (value: unknown) =>
+            Array.isArray(value) ? value[0] : typeof value === "string" ? value : undefined;
+        const searchTerm = normalizeQuery(search)?.trim();
+        const subjectTerm = normalizeQuery(subject)?.trim();
+        const teacherTerm = normalizeQuery(teacher)?.trim();
 
         const parsedPage = Number(page);
         const parsedLimit = Number(limit);
@@ -24,21 +26,21 @@ router.get("/", async (req, res) => {
 
         const filterConditions = [];
 
-        if (search) {
+        if (searchTerm) {
             filterConditions.push(
                 or(
-                    ilike(classes.name, `%${search}%`),
-                    ilike(classes.inviteCode, `%${search}%`)
+                    ilike(classes.name, `%${searchTerm}%`),
+                    ilike(classes.inviteCode, `%${searchTerm}%`)
                 )
             );
         }
 
-        if (subject) {
-            filterConditions.push(ilike(subjects.name, `%${subject}%`));
+        if (subjectTerm) {
+            filterConditions.push(ilike(subjects.name, `%${subjectTerm}%`));
         }
 
-        if (teacher) {
-            filterConditions.push(ilike(user.name, `%${teacher}%`));
+        if (teacherTerm) {
+            filterConditions.push(ilike(user.name, `%${teacherTerm}%`));
         }
 
         const whereClause =
@@ -100,6 +102,17 @@ router.post('/', async (req, res) => {
             bannerUrl,
             bannerCldPubId,
             } = req.body;
+
+        if (!name || !teacherId || !subjectId) {
+            return res.status(400).json({ error: "name, teacherId, and subjectId are required" });
+        }
+
+        const parsedCapacity = capacity == null ? undefined : Number(capacity);
+        const isValidNumber = parsedCapacity !== undefined && Number.isFinite(parsedCapacity);
+
+        if (capacity != null && (!isValidNumber || parsedCapacity! <= 0)) {
+            return res.status(400).json({ error: "capacity must be a positive number" });
+        }
 
         const [createdClass] = await db
             .insert(classes)
