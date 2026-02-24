@@ -3,6 +3,8 @@ import {classes, subjects, user} from "../db/Schema/index.js";
 import {db} from "../db/index.js";
 import {and, desc, eq, getTableColumns, ilike, or, sql} from "drizzle-orm";
 
+import { randomBytes } from "crypto";
+
 const router = express.Router();
 
 // Get all classes with optional search, subject, teacher filters, and pagination
@@ -10,8 +12,14 @@ router.get("/", async (req, res) => {
     try {
         const { search, subject, teacher, page = 1, limit = 10 } = req.query;
 
-        const currentPage = Math.max(1, +page);
-        const limitPerPage = Math.max(1, +limit);
+        // const currentPage = Math.max(1, +page);
+        // const limitPerPage = Math.max(1, +limit);
+
+        const parsedPage = Number(page);
+        const parsedLimit = Number(limit);
+        const currentPage = Number.isFinite(parsedPage) && parsedPage > 0 ? Math.floor(parsedPage) : 1;
+        const limitPerPage = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : 10;
+
         const offset = (currentPage - 1) * limitPerPage;
 
         const filterConditions = [];
@@ -52,7 +60,9 @@ router.get("/", async (req, res) => {
                     ...getTableColumns(subjects),
                 },
                 teacher: {
-                    ...getTableColumns(user),
+                    id: user.id,
+                    name: user.name,
+                    image: user.image,
                 },
             })
             .from(classes)
@@ -95,7 +105,7 @@ router.post('/', async (req, res) => {
             .insert(classes)
             .values({
                 subjectId,
-                inviteCode: Math.random().toString(36).substring(2, 9),
+                inviteCode: randomBytes(8).toString("hex"),
                 name,
                 teacherId,
                 bannerCldPubId,
