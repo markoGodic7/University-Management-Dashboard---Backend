@@ -1,5 +1,5 @@
 import express from "express";
-import {classes, subjects, user} from "../db/Schema/index.js";
+import {classes, departments, subjects, user} from "../db/Schema/index.js";
 import {db} from "../db/index.js";
 import {and, desc, eq, getTableColumns, ilike, or, sql} from "drizzle-orm";
 
@@ -89,6 +89,45 @@ router.get("/", async (req, res) => {
         res.status(500).json({ error: "Failed to fetch classes" });
     }
 });
+
+// Get classes details with techer, subject and department
+router.get("/:id", async(req, res) => {
+    try {
+        const classId = Number(req.params.id);
+        if (!Number.isInteger(classId) || classId <= 0) {
+            return res.status(400).json({ error: "Invalid class id" });
+        }
+
+        const [classDetails] = await db
+            .select({
+                ...getTableColumns(classes),
+                subjects: {
+                    ...getTableColumns(subjects),
+                },
+                department: {
+                    ...getTableColumns(departments),
+                },
+                teacher: {
+                    id: user.id,
+                    name: user.name,
+                    image: user.image,
+                }
+            })
+            .from(classes)
+            .leftJoin(subjects, eq(classes.subjectId, subjects.id))
+            .leftJoin(user, eq(classes.teacherId, user.id))
+            .leftJoin(departments, eq(subjects.departmentId, departments.id))
+            .where(eq(classes.id, classId));
+
+        if (!classDetails) return res.status(404).json({ error: "Class not found" });
+
+        res.status(200).json({ data: classDetails });
+    } catch (error) {
+        console.error("GET /classes/:id error:", error);
+        res.status(500).json({ error: "Failed to fetch class" });
+    }
+
+})
 
 router.post('/', async (req, res) => {
     try {
