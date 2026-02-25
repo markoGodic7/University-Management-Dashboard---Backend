@@ -1,63 +1,77 @@
 import express from "express";
-import {and, desc, eq, getTableColumns, ilike, or, sql} from "drizzle-orm";
-import {departments, subjects} from "../db/Schema/index.js";
-import { db } from "../db/index.js"
+import { eq, ilike, or, and, desc, sql, getTableColumns } from "drizzle-orm";
+
+import { db } from "../db/index.js";
+import { classes, departments, enrollments, subjects, user } from "../db/Schema/index.js";
 
 const router = express.Router();
 
+// Get all subjects with optional search, department filter, and pagination
 router.get("/", async (req, res) => {
     try {
+        const { search, department, page = 1, limit = 10 } = req.query;
 
-        const {search, department, page = 1, limit = 10} = req.query;
-        const rawPage = Array.isArray(page) ? page[0] : page;
-        const rawLimit = Array.isArray(limit) ? limit[0] : limit;
-        const pageNum = Number(rawPage);
-        const limitNum = Number(rawLimit);
-        const currentPage = Number.isFinite(pageNum) && pageNum > 0 ? Math.floor(pageNum) : 1;
-        const limitPerPage = Number.isFinite(limitNum) && limitNum > 0
-          ? Math.min(100, Math.floor(limitNum))
-          : 10;
+        const MAX_LIMIT = 100;
+
+        const parsedPage = Number(page);
+        const parsedLimit = Number(limit);
+        if (!Number.isInteger(parsedPage) || parsedPage < 1) {
+            return res.status(400).json({ error: "Invalid page" });
+        }
+        if (!Number.isInteger(parsedLimit) || parsedLimit < 1) {
+            return res.status(400).json({ error: "Invalid limit" });
+        }
+        const currentPage = parsedPage;
+        const limitPerPage = Math.min(parsedLimit, MAX_LIMIT);
+
 
         const offset = (currentPage - 1) * limitPerPage;
 
         const filterConditions = [];
 
-        // If search query exists, filter by subject name or subject code
+        function escapeLike(value: string): string {
+            return value.replace(/[%_\\]/g, "\\$&");
+        }
+
         if (search) {
             filterConditions.push(
                 or(
-                    ilike(subjects.name, `%${search}%`),
-                    ilike(subjects.code, `%${search}%`),
+                    ilike(subjects.name, `%${escapeLike(String(search))}%`),
+                    ilike(subjects.code, `%${escapeLike(String(search))}%`)
                 )
             );
         }
 
-        // If department filter exists, match department name
         if (department) {
-            const deptPattern = `%${String(department).replace(/[%_]/g, '\\$&')}%`;
-            filterConditions.push(ilike(departments.name, deptPattern));
+            filterConditions.push(ilike(departments.name, `%${department}%`));
         }
 
-        // Combine all filters using AND if any exists
-        const whereClause = filterConditions.length > 0 ? and(...filterConditions) : undefined;
+        const whereClause =
+            filterConditions.length > 0 ? and(...filterConditions) : undefined;
 
-        const countResults = await db
-            .select({count: sql<number>`count(*)`})
+        // Count query MUST include the join
+        const countResult = await db
+            .select({ count: sql<number>`count(*)` })
             .from(subjects)
             .leftJoin(departments, eq(subjects.departmentId, departments.id))
             .where(whereClause);
 
-        const totalCount = countResults[0]?.count ?? 0;
+        const totalCount = countResult[0]?.count ?? 0;
 
+        // Data query
         const subjectsList = await db
             .select({
                 ...getTableColumns(subjects),
-                department: {...getTableColumns(departments)},
-            }).from(subjects).leftJoin(departments, eq(subjects.departmentId, departments.id))
-            .where(whereClause).orderBy(desc(subjects.createdAt))
+                department: {
+                    ...getTableColumns(departments),
+                },
+            })
+            .from(subjects)
+            .leftJoin(departments, eq(subjects.departmentId, departments.id))
+            .where(whereClause)
+            .orderBy(desc(subjects.createdAt))
             .limit(limitPerPage)
             .offset(offset);
-
 
         res.status(200).json({
             data: subjectsList,
@@ -68,10 +82,270 @@ router.get("/", async (req, res) => {
                 totalPages: Math.ceil(totalCount / limitPerPage),
             },
         });
+    } catch (error) {
+        console.error("GET /subjects error:", error);
+        res.status(500).json({ error: "Failed to fetch subjects" });
+    }
+});
 
-    }catch (e) {
-        console.error(`GET /subjects error: ${e}`);
-        res.status(500).json({error: 'Failed to get subjects'});
+router.post("/", async (req, res) => {
+    try {
+        const { departmentId, name, code, description } = req.body;
+
+        const parsedDepartmentId = Number(departmentId);
+        const normalizedName = typeof name === "string" ? name.trim() : "";
+        const normalizedCode = typeof code === "string" ? code.trim() : "";
+        const normalizedDescription =
+                        typeof description === "string" ? description.trim() : null;
+
+        if (!Number.isInteger(parsedDepartmentId) || parsedDepartmentId < 1) {
+            return res.status(400).json({ error: "Invalid departmentId" });
+        }
+        if (!normalizedName || !normalizedCode) {
+            return res.status(400).json({ error: "name and code are required" });
+        }
+
+        const [createdSubject] = await db
+            .insert(subjects)
+            .values({
+                departmentId: parsedDepartmentId,
+                name: normalizedName,
+                code: normalizedCode,
+                description: normalizedDescription,
+            })
+            .returning({ id: subjects.id });
+
+        if (!createdSubject) {
+            return res.status(500).json({ error: "Failed to create subject" });
+        }
+
+        res.status(201).json({ data: createdSubject });
+    } catch (error) {
+
+        if (typeof error === "object" && error && "code" in error) {
+            const dbCode = (error as { code?: string }).code;
+            if (dbCode === "23503") {
+                return res.status(400).json({ error: "Invalid departmentId" });
+            }
+            if (dbCode === "23505") {
+                return res.status(409).json({ error: "Subject code already exists" });
+            }
+        }
+
+        console.error("POST /subjects error:", error);
+        res.status(500).json({ error: "Failed to create subject" });
+    }
+});
+
+// Get subject details with counts
+router.get("/:id", async (req, res) => {
+    try {
+        const subjectId = Number(req.params.id);
+
+        if (!Number.isInteger(subjectId) || subjectId < 1) {
+            return res.status(400).json({ error: "Invalid subject id" });
+        }
+
+        const [subject] = await db
+            .select({
+                ...getTableColumns(subjects),
+                department: {
+                    ...getTableColumns(departments),
+                },
+            })
+            .from(subjects)
+            .leftJoin(departments, eq(subjects.departmentId, departments.id))
+            .where(eq(subjects.id, subjectId));
+
+        if (!subject) {
+            return res.status(404).json({ error: "Subject not found" });
+        }
+
+        const classesCount = await db
+            .select({ count: sql<number>`count(*)` })
+            .from(classes)
+            .where(eq(classes.subjectId, subjectId));
+
+        res.status(200).json({
+            data: {
+                subject,
+                totals: {
+                    classes: classesCount[0]?.count ?? 0,
+                },
+            },
+        });
+    } catch (error) {
+        console.error("GET /subjects/:id error:", error);
+        res.status(500).json({ error: "Failed to fetch subject details" });
+    }
+});
+
+// List classes in a subject with pagination
+router.get("/:id/classes", async (req, res) => {
+    try {
+        const subjectId = Number(req.params.id);
+        const { page = 1, limit = 10 } = req.query;
+
+        if (!Number.isInteger(subjectId) || subjectId < 1) {
+            return res.status(400).json({ error: "Invalid subject id" });
+        }
+
+        const MAX_LIMIT = 100;
+
+        const parsedPage = Number(page);
+        const parsedLimit = Number(limit);
+        if (!Number.isInteger(parsedPage) || parsedPage < 1) {
+            return res.status(400).json({ error: "Invalid page" });
+        }
+        if (!Number.isInteger(parsedLimit) || parsedLimit < 1) {
+            return res.status(400).json({ error: "Invalid limit" });
+        }
+        const currentPage = parsedPage;
+        const limitPerPage = Math.min(parsedLimit, MAX_LIMIT);
+
+        const offset = (currentPage - 1) * limitPerPage;
+
+        const countResult = await db
+            .select({ count: sql<number>`count(*)` })
+            .from(classes)
+            .where(eq(classes.subjectId, subjectId));
+
+        const totalCount = countResult[0]?.count ?? 0;
+
+        const classesList = await db
+            .select({
+                ...getTableColumns(classes),
+                teacher: {
+                    id: user.id,
+                    name: user.name,
+                    image: user.image,
+                },
+            })
+            .from(classes)
+            .leftJoin(user, eq(classes.teacherId, user.id))
+            .where(eq(classes.subjectId, subjectId))
+            .orderBy(desc(classes.createdAt))
+            .limit(limitPerPage)
+            .offset(offset);
+
+        res.status(200).json({
+            data: classesList,
+            pagination: {
+                page: currentPage,
+                limit: limitPerPage,
+                total: totalCount,
+                totalPages: Math.ceil(totalCount / limitPerPage),
+            },
+        });
+    } catch (error) {
+        console.error("GET /subjects/:id/classes error:", error);
+        res.status(500).json({ error: "Failed to fetch subject classes" });
+    }
+});
+
+// List users in a subject by role with pagination
+router.get("/:id/users", async (req, res) => {
+    try {
+        const subjectId = Number(req.params.id);
+        const { role, page = 1, limit = 10 } = req.query;
+
+        if (!Number.isInteger(subjectId) || subjectId < 1) {
+            return res.status(400).json({ error: "Invalid subject id" });
+        }
+
+        if (role !== "teacher" && role !== "student") {
+            return res.status(400).json({ error: "Invalid role" });
+        }
+
+        const MAX_LIMIT = 100;
+
+        const parsedPage = Number(page);
+        const parsedLimit = Number(limit);
+        if (!Number.isInteger(parsedPage) || parsedPage < 1) {
+            return res.status(400).json({ error: "Invalid page" });
+        }
+        if (!Number.isInteger(parsedLimit) || parsedLimit < 1) {
+            return res.status(400).json({ error: "Invalid limit" });
+        }
+        const currentPage = parsedPage;
+        const limitPerPage = Math.min(parsedLimit, MAX_LIMIT);
+
+        const offset = (currentPage - 1) * limitPerPage;
+
+        const baseSelect = {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            emailVerified: user.emailVerified,
+            image: user.image,
+            role: user.role,
+            imageCldPubId: user.imageCldPubId,
+            createdAt: user.createdAt,
+            updatedAt: user.updatedAt,
+        };
+
+        const groupByFields = [
+            user.id,
+            user.name,
+            user.email,
+            user.emailVerified,
+            user.image,
+            user.role,
+            user.imageCldPubId,
+            user.createdAt,
+            user.updatedAt,
+        ];
+
+        const countResult =
+            role === "teacher"
+                ? await db
+                    .select({ count: sql<number>`count(distinct ${user.id})` })
+                    .from(user)
+                    .leftJoin(classes, eq(user.id, classes.teacherId))
+                    .where(and(eq(user.role, role), eq(classes.subjectId, subjectId)))
+                : await db
+                    .select({ count: sql<number>`count(distinct ${user.id})` })
+                    .from(user)
+                    .leftJoin(enrollments, eq(user.id, enrollments.studentId))
+                    .leftJoin(classes, eq(enrollments.classId, classes.id))
+                    .where(and(eq(user.role, role), eq(classes.subjectId, subjectId)));
+
+        const totalCount = countResult[0]?.count ?? 0;
+
+        const usersList =
+            role === "teacher"
+                ? await db
+                    .select(baseSelect)
+                    .from(user)
+                    .leftJoin(classes, eq(user.id, classes.teacherId))
+                    .where(and(eq(user.role, role), eq(classes.subjectId, subjectId)))
+                    .groupBy(...groupByFields)
+                    .orderBy(desc(user.createdAt))
+                    .limit(limitPerPage)
+                    .offset(offset)
+                : await db
+                    .select(baseSelect)
+                    .from(user)
+                    .leftJoin(enrollments, eq(user.id, enrollments.studentId))
+                    .leftJoin(classes, eq(enrollments.classId, classes.id))
+                    .where(and(eq(user.role, role), eq(classes.subjectId, subjectId)))
+                    .groupBy(...groupByFields)
+                    .orderBy(desc(user.createdAt))
+                    .limit(limitPerPage)
+                    .offset(offset);
+
+        res.status(200).json({
+            data: usersList,
+            pagination: {
+                page: currentPage,
+                limit: limitPerPage,
+                total: totalCount,
+                totalPages: Math.ceil(totalCount / limitPerPage),
+            },
+        });
+    } catch (error) {
+        console.error("GET /subjects/:id/users error:", error);
+        res.status(500).json({ error: "Failed to fetch subject users" });
     }
 });
 
