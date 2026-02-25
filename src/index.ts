@@ -9,6 +9,7 @@ import {toNodeHandler} from "better-auth/node";
 import {auth} from "./lib/auth.js";
 import usersRouter from "./routes/users.js";
 import classesRouter from "./routes/classes.js";
+import departmentsRouter from "./routes/departments";
 
 const app = express();
 const PORT = 8000;
@@ -28,6 +29,7 @@ app.all('/api/auth/*splat', toNodeHandler(auth));
 app.use('/api/subjects', subjectsRouter)
 app.use('/api/users', usersRouter)
 app.use('/api/classes', classesRouter)
+app.use("/api/departments", departmentsRouter);
 
 app.get('/', (req, res) => {
     res.send('Hello, welcome to the Classroom API!');
