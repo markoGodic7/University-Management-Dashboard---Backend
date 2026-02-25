@@ -11,8 +11,20 @@ router.get("/", async (req, res) => {
     try {
         const { search, department, page = 1, limit = 10 } = req.query;
 
-        const currentPage = Math.max(1, +page);
-        const limitPerPage = Math.max(1, +limit);
+        const MAX_LIMIT = 100;
+
+        const parsedPage = Number(page);
+        const parsedLimit = Number(limit);
+        if (!Number.isInteger(parsedPage) || parsedPage < 1) {
+            return res.status(400).json({ error: "Invalid page" });
+        }
+        if (!Number.isInteger(parsedLimit) || parsedLimit < 1) {
+        return res.status(400).json({ error: "Invalid limit" });
+        }
+        const currentPage = parsedPage;
+        const limitPerPage = Math.min(parsedLimit, MAX_LIMIT);
+
+
         const offset = (currentPage - 1) * limitPerPage;
 
         const filterConditions = [];
@@ -76,15 +88,46 @@ router.post("/", async (req, res) => {
     try {
         const { departmentId, name, code, description } = req.body;
 
+        const parsedDepartmentId = Number(departmentId);
+        const normalizedName = typeof name === "string" ? name.trim() : "";
+        const normalizedCode = typeof code === "string" ? code.trim() : "";
+        const normalizedDescription =
+                        typeof description === "string" ? description.trim() : null;
+
+        if (!Number.isInteger(parsedDepartmentId) || parsedDepartmentId < 1) {
+            return res.status(400).json({ error: "Invalid departmentId" });
+        }
+        if (!normalizedName || !normalizedCode) {
+            return res.status(400).json({ error: "name and code are required" });
+        }
+
         const [createdSubject] = await db
             .insert(subjects)
-            .values({ departmentId, name, code, description })
+            .values({
+                departmentId: parsedDepartmentId,
+                name: normalizedName,
+                code: normalizedCode,
+                description: normalizedDescription,
+            })
             .returning({ id: subjects.id });
 
-        if (!createdSubject) throw Error;
+        if (!createdSubject) {
+            return res.status(500).json({ error: "Failed to create subject" });
+        }
 
         res.status(201).json({ data: createdSubject });
     } catch (error) {
+
+        if (typeof error === "object" && error && "code" in error) {
+            const dbCode = (error as { code?: string }).code;
+            if (dbCode === "23503") {
+                return res.status(400).json({ error: "Invalid departmentId" });
+            }
+            if (dbCode === "23505") {
+                return res.status(409).json({ error: "Subject code already exists" });
+            }
+        }
+
         console.error("POST /subjects error:", error);
         res.status(500).json({ error: "Failed to create subject" });
     }
@@ -143,8 +186,19 @@ router.get("/:id/classes", async (req, res) => {
             return res.status(400).json({ error: "Invalid subject id" });
         }
 
-        const currentPage = Math.max(1, +page);
-        const limitPerPage = Math.max(1, +limit);
+        const MAX_LIMIT = 100;
+
+        const parsedPage = Number(page);
+        const parsedLimit = Number(limit);
+        if (!Number.isInteger(parsedPage) || parsedPage < 1) {
+            return res.status(400).json({ error: "Invalid page" });
+        }
+        if (!Number.isInteger(parsedLimit) || parsedLimit < 1) {
+            return res.status(400).json({ error: "Invalid limit" });
+        }
+        const currentPage = parsedPage;
+        const limitPerPage = Math.min(parsedLimit, MAX_LIMIT);
+
         const offset = (currentPage - 1) * limitPerPage;
 
         const countResult = await db
@@ -197,8 +251,19 @@ router.get("/:id/users", async (req, res) => {
             return res.status(400).json({ error: "Invalid role" });
         }
 
-        const currentPage = Math.max(1, +page);
-        const limitPerPage = Math.max(1, +limit);
+        const MAX_LIMIT = 100;
+
+        const parsedPage = Number(page);
+        const parsedLimit = Number(limit);
+        if (!Number.isInteger(parsedPage) || parsedPage < 1) {
+            return res.status(400).json({ error: "Invalid page" });
+        }
+        if (!Number.isInteger(parsedLimit) || parsedLimit < 1) {
+            return res.status(400).json({ error: "Invalid limit" });
+        }
+        const currentPage = parsedPage;
+        const limitPerPage = Math.min(parsedLimit, MAX_LIMIT);
+
         const offset = (currentPage - 1) * limitPerPage;
 
         const baseSelect = {

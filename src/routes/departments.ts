@@ -17,9 +17,32 @@ router.get("/", async (req, res) => {
     try {
         const { search, page = 1, limit = 10 } = req.query;
 
-        const currentPage = Math.max(1, +page);
-        const limitPerPage = Math.max(1, +limit);
-        const offset = (currentPage - 1) * limitPerPage;
+        const MAX_LIMIT = 100;
+
+        function getPagination(page: unknown, limit: unknown) {
+            const parsedPage = Number(page);
+            const parsedLimit = Number(limit);
+
+            if (!Number.isInteger(parsedPage) || parsedPage < 1) {
+                return { error: "Invalid page" } as const;
+            }
+            if (!Number.isInteger(parsedLimit) || parsedLimit < 1) {
+                return { error: "Invalid limit" } as const;
+            }
+
+            const boundedLimit = Math.min(parsedLimit, MAX_LIMIT);
+            return {
+                page: parsedPage,
+                limit: boundedLimit,
+                offset: (parsedPage - 1) * boundedLimit,
+            } as const;
+        }
+
+        const pagination = getPagination(page, limit);
+        if ("error" in pagination) {
+            return res.status(400).json({ error: pagination.error });
+            }
+        const { page: currentPage, limit: limitPerPage, offset } = pagination;
 
         const filterConditions = [];
 
@@ -74,15 +97,36 @@ router.post("/", async (req, res) => {
     try {
         const { code, name, description } = req.body;
 
+        const normalizedCode = typeof code === "string" ? code.trim() : "";
+        const normalizedName = typeof name === "string" ? name.trim() : "";
+        const normalizedDescription =
+        typeof description === "string" ? description.trim() : null;
+
+        if (!normalizedCode || !normalizedName) {
+            return res.status(400).json({ error: "code and name are required" });
+        }
+
         const [createdDepartment] = await db
             .insert(departments)
-            .values({ code, name, description })
+            .values({
+                code: normalizedCode,
+                name: normalizedName,
+                description: normalizedDescription,
+            })
             .returning({ id: departments.id });
 
-        if (!createdDepartment) throw Error;
+        if (!createdDepartment) {
+            return res.status(500).json({ error: "Failed to create department" });
+        }
 
         res.status(201).json({ data: createdDepartment });
     } catch (error) {
+        if (typeof error === "object" && error && "code" in error) {
+            const dbCode = (error as { code?: string }).code;
+            if (dbCode === "23505") {
+                return res.status(409).json({ error: "Department code already exists" });
+            }
+        }
         console.error("POST /departments error:", error);
         res.status(500).json({ error: "Failed to create department" });
     }
@@ -157,9 +201,33 @@ router.get("/:id/subjects", async (req, res) => {
             return res.status(400).json({ error: "Invalid department id" });
         }
 
-        const currentPage = Math.max(1, +page);
-        const limitPerPage = Math.max(1, +limit);
-        const offset = (currentPage - 1) * limitPerPage;
+        const MAX_LIMIT = 100;
+
+        function getPagination(page: unknown, limit: unknown) {
+            const parsedPage = Number(page);
+            const parsedLimit = Number(limit);
+
+            if (!Number.isInteger(parsedPage) || parsedPage < 1) {
+                return { error: "Invalid page" } as const;
+            }
+            if (!Number.isInteger(parsedLimit) || parsedLimit < 1) {
+                return { error: "Invalid limit" } as const;
+            }
+
+            const boundedLimit = Math.min(parsedLimit, MAX_LIMIT);
+            return {
+                page: parsedPage,
+                limit: boundedLimit,
+                offset: (parsedPage - 1) * boundedLimit,
+            } as const;
+        }
+
+        const pagination = getPagination(page, limit);
+        if ("error" in pagination) {
+            return res.status(400).json({ error: pagination.error });
+        }
+        const { page: currentPage, limit: limitPerPage, offset } = pagination;
+
 
         const countResult = await db
             .select({ count: sql<number>`count(*)` })
@@ -203,9 +271,37 @@ router.get("/:id/classes", async (req, res) => {
             return res.status(400).json({ error: "Invalid department id" });
         }
 
-        const currentPage = Math.max(1, +page);
-        const limitPerPage = Math.max(1, +limit);
-        const offset = (currentPage - 1) * limitPerPage;
+        // const currentPage = Math.max(1, +page);
+        // const limitPerPage = Math.max(1, +limit);
+        // const offset = (currentPage - 1) * limitPerPage;
+
+        const MAX_LIMIT = 100;
+
+        function getPagination(page: unknown, limit: unknown) {
+            const parsedPage = Number(page);
+            const parsedLimit = Number(limit);
+
+            if (!Number.isInteger(parsedPage) || parsedPage < 1) {
+                return { error: "Invalid page" } as const;
+            }
+            if (!Number.isInteger(parsedLimit) || parsedLimit < 1) {
+                return { error: "Invalid limit" } as const;
+            }
+
+            const boundedLimit = Math.min(parsedLimit, MAX_LIMIT);
+            return {
+                page: parsedPage,
+                limit: boundedLimit,
+                offset: (parsedPage - 1) * boundedLimit,
+            } as const;
+        }
+
+        const pagination = getPagination(page, limit);
+        if ("error" in pagination) {
+            return res.status(400).json({ error: pagination.error });
+        }
+        const { page: currentPage, limit: limitPerPage, offset } = pagination;
+
 
         const countResult = await db
             .select({ count: sql<number>`count(${classes.id})` })
@@ -262,9 +358,33 @@ router.get("/:id/users", async (req, res) => {
             return res.status(400).json({ error: "Invalid role" });
         }
 
-        const currentPage = Math.max(1, +page);
-        const limitPerPage = Math.max(1, +limit);
-        const offset = (currentPage - 1) * limitPerPage;
+        const MAX_LIMIT = 100;
+
+        function getPagination(page: unknown, limit: unknown) {
+            const parsedPage = Number(page);
+            const parsedLimit = Number(limit);
+
+            if (!Number.isInteger(parsedPage) || parsedPage < 1) {
+                return { error: "Invalid page" } as const;
+            }
+            if (!Number.isInteger(parsedLimit) || parsedLimit < 1) {
+                return { error: "Invalid limit" } as const;
+            }
+
+            const boundedLimit = Math.min(parsedLimit, MAX_LIMIT);
+            return {
+                page: parsedPage,
+                limit: boundedLimit,
+                offset: (parsedPage - 1) * boundedLimit,
+            } as const;
+        }
+
+        const pagination = getPagination(page, limit);
+        if ("error" in pagination) {
+            return res.status(400).json({ error: pagination.error });
+        }
+        const { page: currentPage, limit: limitPerPage, offset } = pagination;
+
 
         const baseSelect = {
             id: user.id,

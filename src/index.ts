@@ -9,7 +9,7 @@ import {toNodeHandler} from "better-auth/node";
 import {auth} from "./lib/auth.js";
 import usersRouter from "./routes/users.js";
 import classesRouter from "./routes/classes.js";
-import departmentsRouter from "./routes/departments";
+import departmentsRouter from "./routes/departments.js";
 
 const app = express();
 const PORT = 8000;
