@@ -19,7 +19,7 @@ router.get("/", async (req, res) => {
             return res.status(400).json({ error: "Invalid page" });
         }
         if (!Number.isInteger(parsedLimit) || parsedLimit < 1) {
-        return res.status(400).json({ error: "Invalid limit" });
+            return res.status(400).json({ error: "Invalid limit" });
         }
         const currentPage = parsedPage;
         const limitPerPage = Math.min(parsedLimit, MAX_LIMIT);
@@ -29,11 +29,15 @@ router.get("/", async (req, res) => {
 
         const filterConditions = [];
 
+        function escapeLike(value: string): string {
+            return value.replace(/[%_\\]/g, "\\$&");
+        }
+
         if (search) {
             filterConditions.push(
                 or(
-                    ilike(subjects.name, `%${search}%`),
-                    ilike(subjects.code, `%${search}%`)
+                    ilike(subjects.name, `%${escapeLike(String(search))}%`),
+                    ilike(subjects.code, `%${escapeLike(String(search))}%`)
                 )
             );
         }
@@ -212,7 +216,9 @@ router.get("/:id/classes", async (req, res) => {
             .select({
                 ...getTableColumns(classes),
                 teacher: {
-                    ...getTableColumns(user),
+                    id: user.id,
+                    name: user.name,
+                    image: user.image,
                 },
             })
             .from(classes)
