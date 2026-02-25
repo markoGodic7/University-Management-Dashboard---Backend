@@ -1,5 +1,5 @@
 import express from "express";
-import { and, eq, getTableColumns } from "drizzle-orm";
+import {and, eq, getTableColumns, sql} from "drizzle-orm";
 
 import { db } from "../db/index.js";
 import { classes, departments, enrollments, subjects, user } from "../db/Schema/index.js";
@@ -20,7 +20,10 @@ const getEnrollmentDetails = async (enrollmentId: number) => {
                 ...getTableColumns(departments),
             },
             teacher: {
-                ...getTableColumns(user),
+                id: user.id,
+                name: user.name,
+                image: user.image,
+                role: user.role,
             },
         })
         .from(enrollments)
@@ -38,7 +41,7 @@ router.post("/", async (req, res) => {
     try {
         const { classId, studentId } = req.body;
 
-        if (!classId || !studentId) {
+        if (!classId || typeof classId !== "number" || !studentId || typeof studentId !== "string") {
             return res
                 .status(400)
                 .json({ error: "classId and studentId are required" });
@@ -51,12 +54,28 @@ router.post("/", async (req, res) => {
 
         if (!classRecord) return res.status(404).json({ error: "Class not found" });
 
+        if (classRecord.status !== "active")
+            return res.status(400).json({ error: "Class is not active" });
+
+        const result = await db
+            .select({ count: sql<number>`cast(count(*) as int)` })
+            .from(enrollments)
+            .where(eq(enrollments.classId, classRecord.id));
+
+        const count = result[0]?.count ?? 0;
+
+        if (count >= classRecord.capacity)
+            return res.status(409).json({ error: "Class is at full capacity" });
+
         const [student] = await db
             .select()
             .from(user)
             .where(eq(user.id, studentId));
 
         if (!student) return res.status(404).json({ error: "Student not found" });
+
+        if (student.role !== "student")
+            return res.status(400).json({ error: "User is not a student" });
 
         const [existingEnrollment] = await db
             .select({ id: enrollments.id })
@@ -76,11 +95,11 @@ router.post("/", async (req, res) => {
         const [createdEnrollment] = await db
             .insert(enrollments)
             .values({ classId, studentId })
+            .onConflictDoNothing()
             .returning({ id: enrollments.id });
 
         if (!createdEnrollment)
-            return res.status(500).json({ error: "Failed to create enrollment" });
-
+            return res.status(409).json({ error: "Student already enrolled in class" });
         const enrollment = await getEnrollmentDetails(createdEnrollment.id);
 
         res.status(201).json({ data: enrollment });
