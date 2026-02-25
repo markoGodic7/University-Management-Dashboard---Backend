@@ -138,7 +138,7 @@ router.get("/:id", async (req, res) => {
     try {
         const subjectId = Number(req.params.id);
 
-        if (!Number.isFinite(subjectId)) {
+        if (!Number.isInteger(subjectId) || subjectId < 1) {
             return res.status(400).json({ error: "Invalid subject id" });
         }
 
@@ -182,7 +182,7 @@ router.get("/:id/classes", async (req, res) => {
         const subjectId = Number(req.params.id);
         const { page = 1, limit = 10 } = req.query;
 
-        if (!Number.isFinite(subjectId)) {
+        if (!Number.isInteger(subjectId) || subjectId < 1) {
             return res.status(400).json({ error: "Invalid subject id" });
         }
 
@@ -243,7 +243,7 @@ router.get("/:id/users", async (req, res) => {
         const subjectId = Number(req.params.id);
         const { role, page = 1, limit = 10 } = req.query;
 
-        if (!Number.isFinite(subjectId)) {
+        if (!Number.isInteger(subjectId) || subjectId < 1) {
             return res.status(400).json({ error: "Invalid subject id" });
         }
 
